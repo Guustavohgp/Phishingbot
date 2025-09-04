@@ -9,7 +9,7 @@ __pycache__/
 .vscode/
 
 # Requirements
-.requirements.txt/
+requirements.txt
 
 # Secrets
 *.env
