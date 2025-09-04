@@ -5,6 +5,12 @@ __pycache__/
 # Virtual environment
 .venv/
 
+# Vscode
+.vscode/
+
+# Requirements
+.requirements.txt/
+
 # Secrets
 *.env
 client_secret_*.json
