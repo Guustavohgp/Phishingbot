@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Secrets
+*.env
+client_secret_*.json
