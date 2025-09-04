@@ -17,11 +17,11 @@ TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 
 # Modo simulação: True = NÃO move/arquiva, só loga. Quando calibrar, mude para False.
-DRY_RUN = True
+DRY_RUN = False
 
 # Heurísticas simples
 SUSPICIOUS_TLDS = {"zip", "mov", "xyz", "top", "gq", "tk"}
-BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br"}
+BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br",}
 
 def get_service():
     creds = None
