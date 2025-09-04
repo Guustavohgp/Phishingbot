@@ -29,3 +29,16 @@ No Phishing, criminosos se passam por entidades legítimas, geralmente por e-mai
 - 📝 Registro de e-mails sinalizados como phishing.
 - 🔮 Preparado para integração com IA para moderação e classificação automática.
 
+## 🗺️ Fluxo de Detecção
+
+```mermaid
+flowchart TD
+    A[📥 Receber E-mails via Gmail API] --> B{O remetente é confiável?}
+    B -- Sim --> C[📌 Classificar como seguro]
+    B -- Não --> D{Domínio na lista suspeita?}
+    D -- Sim --> E[🚨 Marcar como phishing]
+    D -- Não --> F[🔍 Analisar padrões suspeitos no conteúdo]
+    F -- Suspeito --> E
+    F -- Seguro --> C
+    E --> G[📝 Registrar e alertar o usuário]
+    C --> H[✅ Finalizar verificação]
