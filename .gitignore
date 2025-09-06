@@ -25,3 +25,6 @@ iniciar.txt
 
 #Vertex
 vertex-ia-sa.json
+
+#Histórico Phishing
+phishing_history.log
