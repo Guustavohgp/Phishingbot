@@ -92,18 +92,27 @@ def looks_like_brand_impersonation(display_name: str, from_addr: str) -> bool:
 
 # --- Vertex AI como moderador ---
 def vertex_moderator(subject: str, body: str) -> str:
-    model = aiplatform.TextGenerationModel.from_pretrained(vertex_model)
+    """
+    Recebe assunto e corpo do email e retorna 'SUSPEITO' ou 'OK' 
+    com explicação breve, de forma geral, sem depender de marcas específicas.
+    """
+    model = aiplatform.TextGenerationModel.from_pretrained("text-bison@001")
+
     prompt = f"""
-Você é um moderador de emails especializado em detectar phishing. Analise o email e responda com 'SUSPEITO' ou 'OK'. 
-Inclua uma breve explicação. Considere:
+Você é um moderador de emails especializado em identificar phishing. Analise o email e classifique como 'SUSPEITO' ou 'OK'.
+Inclua uma breve explicação (1-2 frases).
 
-- Links que imitam bancos ou marcas
-- Domínios estranhos ou TLD suspeitos (.xyz, .top, .zip, etc)
-- Palavras de isca: 'verifique sua conta', 'senha expira', 'clique para atualizar', 'bloqueio da conta'
+Considere phishing qualquer tentativa de:
+- Enganar o usuário para clicar em links maliciosos
+- Solicitar dados pessoais, senhas ou informações financeiras
+- Usar linguagem de urgência ou pressão
+- Usar domínios suspeitos ou que imitam marcas
 
+Email a ser analisado:
 Assunto: {subject}
 Corpo: {body}
 """
+
     response = model.predict(prompt, max_output_tokens=150)
     return response.text.strip()
 
