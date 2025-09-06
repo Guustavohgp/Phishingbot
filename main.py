@@ -18,12 +18,18 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True  # Modo simulação
+DRY_RUN = True  # True = apenas simula, False = move emails
 
+# Heurísticas de phishing
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
+SENSITIVE_KEYWORDS = [
+    "cpf","cartão","senha","rg","confirme suas credenciais",
+    "pague agora","bloqueio da conta","verifique sua conta",
+    "senha expirada","prêmio","ganhou","resgatar"
+]
 
-# Configura Vertex AI (Gemini)
+# Configuração Vertex AI
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
 genai.configure(api_key=None)
 
@@ -45,32 +51,17 @@ Corpo: {body}
     return response.result.strip()
 
 # ---------------------- Heurísticas ----------------------
-# Palavras sensíveis só contam se estiverem pedindo dados explícitos
-SENSITIVE_PHRASES = [
-    "informe seu cpf",
-    "envie seu rg",
-    "número do cartão",
-    "dados bancários",
-    "confirme suas credenciais",
-    "informações pessoais"
-]
-
-URGENCY_KEYWORDS = ["pague agora","bloqueio da conta","verifique sua conta","urgente","imediatamente"]
-
 def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
     score = 0
     reasons = []
-
     text = (subject or "") + "\n" + (body or "")
-    text_lower = text.lower()
     extractor = URLExtract()
     urls = extractor.find_urls(text)
 
     # URLs suspeitas
     for u in urls:
-        ext = tldextract.extract(u)
-        root = f"{ext.domain}.{ext.suffix}" if ext.suffix else ext.domain
-        tld = ext.suffix
+        root = tldextract.extract(u).domain + "." + tldextract.extract(u).suffix
+        tld = tldextract.extract(u).suffix
         if u in SUSPICIOUS_DOMAINS or root in SUSPICIOUS_DOMAINS:
             score += 5
             reasons.append(f"Domínio suspeito: {u}")
@@ -78,19 +69,17 @@ def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
             score += 1
             reasons.append(f"TLD suspeito: .{tld}")
 
-    # Solicitação de dados pessoais
-    for phrase in SENSITIVE_PHRASES:
-        if phrase in text_lower:
-            score += 3
-            reasons.append(f"Solicita dados pessoais sensíveis: '{phrase}'")
-            break
+    # Checa palavras-chave sensíveis
+    for word in SENSITIVE_KEYWORDS:
+        if word.lower() in text.lower():
+            score += 5
+            reasons.append(f"Solicita dados pessoais sensíveis: '{word}'")
 
-    # Linguagem de urgência
-    for kw in URGENCY_KEYWORDS:
-        if kw in text_lower:
-            score += 2
-            reasons.append("Mensagem com linguagem de urgência ou pagamento imediato.")
-            break
+    # Linguagem de urgência ou pagamento imediato
+    urgency_words = ["pague agora","bloqueio da conta","verifique sua conta","senha expirada"]
+    if any(word in text.lower() for word in urgency_words):
+        score += 3
+        reasons.append("Mensagem com linguagem de urgência ou pagamento imediato.")
 
     return score, reasons
 
@@ -148,7 +137,6 @@ def apply_label_and_archive(service, msg_id, label_id):
 def main():
     service = get_service()
     label_id = ensure_label(service)
-
     ids = list_candidate_ids(service, max_results=50)
     if not ids:
         print("Nenhuma mensagem encontrada.")
@@ -165,8 +153,8 @@ def main():
         # Heurísticas primeiro
         score, reasons = check_phishing_heuristics(subject, body)
 
-        # Vertex AI só se heurísticas não detectarem
-        if score < 3:
+        # Vertex AI só reforço se heurísticas não detectarem nada óbvio
+        if score < 5:
             try:
                 vertex_result = vertex_moderator(subject, body)
                 if "suspeito" in vertex_result.lower():
@@ -177,8 +165,12 @@ def main():
 
         snippet = msg.get("snippet","").replace("\n"," ")[:120]
 
-        if score >= 3:
-            print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}") if DRY_RUN else apply_label_and_archive(service, mid, label_id)
+        if score >= 5:
+            if DRY_RUN:
+                print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
+            else:
+                apply_label_and_archive(service, mid, label_id)
+                print(f"[QUARENTENA] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
         else:
             print(f"[OK] id={mid} | snippet: {snippet}")
 
