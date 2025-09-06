@@ -11,12 +11,12 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-# ===== Configurações =====
+# Configurações 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 
-# Modo simulação: True = NÃO move/arquiva, só loga. Quando calibrar, mude para False.
+# Modo simulação: 
 DRY_RUN = False
 
 # Heurísticas simples
