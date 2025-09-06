@@ -2,41 +2,30 @@ from __future__ import annotations
 import os
 import base64
 from email.utils import parseaddr
-from urllib.parse import urlparse
-
-import tldextract
-from urlextract import URLExtract
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-from google.oauth2 import service_account
-from google.cloud import aiplatform
+import google.generativeai as genai
 
 # ---------------------- Configurações ----------------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
-VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True  # Não move emails
+VERTEX_CREDS = "vertex-ia-sa.json"  # JSON da service account
+DRY_RUN = True  # Teste seguro
 
-PROJECT_ID = "gmail-anti-phishing-bot"
-REGION = "us-central1"
-VERTEX_MODEL_NAME = "text-bison@001"
+# Configure Gemini
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
+genai.configure(api_key=None)  # Chave é lida do JSON via GOOGLE_APPLICATION_CREDENTIALS
 
 # ---------------------- Vertex AI ----------------------
-vertex_credentials = service_account.Credentials.from_service_account_file(VERTEX_CREDS)
-aiplatform.init(project=PROJECT_ID, location=REGION, credentials=vertex_credentials)
-
-# Cria instância do modelo
-vertex_model = aiplatform.TextGenerationModel.from_pretrained(VERTEX_MODEL_NAME)
-
 def vertex_moderator(subject: str, body: str) -> str:
     """
-    Vertex decide sozinho se o email é phishing.
-    Retorna 'SUSPEITO' ou 'OK' com explicação curta.
+    Vertex (Gemini) decide sozinho se o email é phishing.
+    Retorna 'SUSPEITO' ou 'OK' com explicação breve.
     """
     prompt = f"""
 Você é um moderador de emails especialista em phishing.
@@ -46,8 +35,12 @@ Explique em 1-2 frases rapidamente.
 Assunto: {subject}
 Corpo: {body}
 """
-    response = vertex_model.predict(prompt, max_output_tokens=150)
-    return response.text.strip()
+    response = genai.generate_text(
+        model="gemini-1.0-pro",
+        prompt=prompt,
+        max_output_tokens=150
+    )
+    return response.result.strip()
 
 # ---------------------- Gmail API ----------------------
 def get_service():
