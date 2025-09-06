@@ -21,7 +21,7 @@ CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
 
 # Modo simulação: 
-DRY_RUN = False
+DRY_RUN = True
 
 # Heurísticas simples
 SUSPICIOUS_TLDS = {"zip", "mov", "xyz", "top", "gq", "tk"}
