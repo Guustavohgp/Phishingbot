@@ -18,7 +18,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = False  # Se True, não move emails, apenas simula
+DRY_RUN = True  # Modo simulação
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
@@ -29,10 +29,6 @@ genai.configure(api_key=None)
 
 # ---------------------- Vertex AI ----------------------
 def vertex_moderator(subject: str, body: str) -> str:
-    """
-    Vertex decide sozinho se o email é phishing.
-    Retorna 'SUSPEITO' ou 'OK' com explicação breve.
-    """
     prompt = f"""
 Você é um moderador de emails especialista em phishing.
 Classifique o email como 'SUSPEITO' ou 'OK'.
@@ -49,14 +45,24 @@ Corpo: {body}
     return response.result.strip()
 
 # ---------------------- Heurísticas ----------------------
-SENSITIVE_KEYWORDS = ["cpf","rg","cartão","senha","dados pessoais","número do cartão","informações bancárias"]
-URGENCY_KEYWORDS = ["pague agora","bloqueio da conta","verifique sua conta","confirme suas credenciais","urgente"]
+# Palavras sensíveis só contam se estiverem pedindo dados explícitos
+SENSITIVE_PHRASES = [
+    "informe seu cpf",
+    "envie seu rg",
+    "número do cartão",
+    "dados bancários",
+    "confirme suas credenciais",
+    "informações pessoais"
+]
+
+URGENCY_KEYWORDS = ["pague agora","bloqueio da conta","verifique sua conta","urgente","imediatamente"]
 
 def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
     score = 0
     reasons = []
 
     text = (subject or "") + "\n" + (body or "")
+    text_lower = text.lower()
     extractor = URLExtract()
     urls = extractor.find_urls(text)
 
@@ -73,15 +79,15 @@ def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
             reasons.append(f"TLD suspeito: .{tld}")
 
     # Solicitação de dados pessoais
-    for kw in SENSITIVE_KEYWORDS:
-        if kw in text.lower():
+    for phrase in SENSITIVE_PHRASES:
+        if phrase in text_lower:
             score += 3
-            reasons.append(f"Solicita dados pessoais sensíveis: '{kw}'")
+            reasons.append(f"Solicita dados pessoais sensíveis: '{phrase}'")
             break
 
-    # Linguagem de urgência ou pagamento imediato
+    # Linguagem de urgência
     for kw in URGENCY_KEYWORDS:
-        if kw in text.lower():
+        if kw in text_lower:
             score += 2
             reasons.append("Mensagem com linguagem de urgência ou pagamento imediato.")
             break
@@ -172,11 +178,7 @@ def main():
         snippet = msg.get("snippet","").replace("\n"," ")[:120]
 
         if score >= 3:
-            if DRY_RUN:
-                print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
-            else:
-                apply_label_and_archive(service, mid, label_id)
-                print(f"[QUARENTENA] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
+            print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}") if DRY_RUN else apply_label_and_archive(service, mid, label_id)
         else:
             print(f"[OK] id={mid} | snippet: {snippet}")
 
