@@ -18,16 +18,21 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True  # Modo simulação
+DRY_RUN = False  # Se True, não move emails, apenas simula
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
 
+# Configura Vertex AI (Gemini)
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
 genai.configure(api_key=None)
 
 # ---------------------- Vertex AI ----------------------
 def vertex_moderator(subject: str, body: str) -> str:
+    """
+    Vertex decide sozinho se o email é phishing.
+    Retorna 'SUSPEITO' ou 'OK' com explicação breve.
+    """
     prompt = f"""
 Você é um moderador de emails especialista em phishing.
 Classifique o email como 'SUSPEITO' ou 'OK'.
@@ -43,49 +48,43 @@ Corpo: {body}
     )
     return response.result.strip()
 
-# ---------------------- Heurísticas melhoradas ----------------------
+# ---------------------- Heurísticas ----------------------
+SENSITIVE_KEYWORDS = ["cpf","rg","cartão","senha","dados pessoais","número do cartão","informações bancárias"]
+URGENCY_KEYWORDS = ["pague agora","bloqueio da conta","verifique sua conta","confirme suas credenciais","urgente"]
+
 def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
     score = 0
     reasons = []
 
     text = (subject or "") + "\n" + (body or "")
-    text_lower = text.lower()
     extractor = URLExtract()
     urls = extractor.find_urls(text)
 
-    # -------------------- Links suspeitos --------------------
+    # URLs suspeitas
     for u in urls:
         ext = tldextract.extract(u)
         root = f"{ext.domain}.{ext.suffix}" if ext.suffix else ext.domain
+        tld = ext.suffix
         if u in SUSPICIOUS_DOMAINS or root in SUSPICIOUS_DOMAINS:
             score += 5
             reasons.append(f"Domínio suspeito: {u}")
-        if ext.suffix in SUSPICIOUS_TLDS:
+        if tld in SUSPICIOUS_TLDS:
+            score += 1
+            reasons.append(f"TLD suspeito: .{tld}")
+
+    # Solicitação de dados pessoais
+    for kw in SENSITIVE_KEYWORDS:
+        if kw in text.lower():
+            score += 3
+            reasons.append(f"Solicita dados pessoais sensíveis: '{kw}'")
+            break
+
+    # Linguagem de urgência ou pagamento imediato
+    for kw in URGENCY_KEYWORDS:
+        if kw in text.lower():
             score += 2
-            reasons.append(f"TLD suspeito: .{ext.suffix}")
-
-    # -------------------- Palavras de urgência --------------------
-    urgent_keywords = [
-        "pague agora", "bloqueio da conta", "verifique sua conta", 
-        "senha expirada", "confirme suas credenciais", "vencimento"
-    ]
-    contains_urgency = any(k in text_lower for k in urgent_keywords)
-    if contains_urgency:
-        score += 2
-        reasons.append("Mensagem com linguagem de urgência.")
-
-    # -------------------- Solicitação de dados pessoais --------------------
-    sensitive_keywords = ["cpf", "rg", "senha", "cartão", "dados bancários", "número do cartão"]
-    contains_sensitive = any(k in text_lower for k in sensitive_keywords)
-    if contains_sensitive and contains_urgency:
-        score += 5
-        reasons.append("Solicita dados pessoais com urgência.")
-
-    # -------------------- Pagamento imediato --------------------
-    payment_keywords = ["pagar", "resgatar prêmio", "transferência", "pagamento"]
-    if any(k in text_lower for k in payment_keywords) and contains_urgency:
-        score += 5
-        reasons.append("Solicita pagamento imediato.")
+            reasons.append("Mensagem com linguagem de urgência ou pagamento imediato.")
+            break
 
     return score, reasons
 
@@ -157,10 +156,10 @@ def main():
         subject = next((h["value"] for h in headers if h["name"].lower()=="subject"), "")
         body = decode_body(msg["payload"])
 
-        # -------------------- Heurísticas --------------------
+        # Heurísticas primeiro
         score, reasons = check_phishing_heuristics(subject, body)
 
-        # -------------------- Vertex AI --------------------
+        # Vertex AI só se heurísticas não detectarem
         if score < 3:
             try:
                 vertex_result = vertex_moderator(subject, body)
