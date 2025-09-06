@@ -45,5 +45,5 @@ flowchart TD
     D -- Não --> F[ 🔍 Analisar padrões ]
     F -- Suspeito --> E
     F -- Seguro --> C
-    E --> G[📝 Registrar e alertar o usuário]
+    E --> G[📝 Registrar e alertar ]
     C --> H[✅ Finalizar verificação]
