@@ -94,8 +94,12 @@ def looks_like_brand_impersonation(display_name: str, from_addr: str) -> bool:
 def vertex_moderator(subject: str, body: str) -> str:
     model = aiplatform.TextGenerationModel.from_pretrained(vertex_model)
     prompt = f"""
-Você é um moderador de emails. Classifique este email como 'OK' ou 'SUSPEITO'.
-Forneça apenas a classificação e uma breve explicação.
+Você é um moderador de emails especializado em detectar phishing. Analise o email e responda com 'SUSPEITO' ou 'OK'. 
+Inclua uma breve explicação. Considere:
+
+- Links que imitam bancos ou marcas
+- Domínios estranhos ou TLD suspeitos (.xyz, .top, .zip, etc)
+- Palavras de isca: 'verifique sua conta', 'senha expira', 'clique para atualizar', 'bloqueio da conta'
 
 Assunto: {subject}
 Corpo: {body}
