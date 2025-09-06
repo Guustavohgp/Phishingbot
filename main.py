@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, base64
+import os
+import base64
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
@@ -11,8 +12,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-from google.oauth2 import service_account
-from google.cloud import aiplatform
+# Biblioteca generativa do Vertex AI
+import google.generativeai as genai
 
 # ---------------------- Configurações ----------------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
@@ -22,21 +23,17 @@ VERTEX_CREDS = "vertex-ia-sa.json"
 DRY_RUN = True  # Teste seguro, não move emails
 
 SUSPICIOUS_TLDS = {"zip", "mov", "xyz", "top", "gq", "tk"}
-BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br"}
+BRAND_DOMAINS = {
+    "google.com","gmail.com","paypal.com","microsoft.com","apple.com",
+    "facebook.com","meta.com","nubank.com.br","itau.com.br"
+}
 
 PROJECT_ID = "gmail-anti-phishing-bot"
 REGION = "us-central1"
-VERTEX_MODEL_NAME = "text-bison@001"
 
 # ---------------------- Vertex AI ----------------------
-vertex_credentials = service_account.Credentials.from_service_account_file(VERTEX_CREDS)
-aiplatform.init(project=PROJECT_ID, location=REGION, credentials=vertex_credentials)
-
-# Instância única do modelo para evitar múltiplas inicializações
-vertex_model_instance = aiplatform.TextGenerationModel(
-    model_name=VERTEX_MODEL_NAME,
-    credentials=vertex_credentials
-)
+os.environ["GOOGLE_API_KEY"] = VERTEX_CREDS
+genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 
 def vertex_moderator(subject: str, body: str) -> str:
     """
@@ -56,8 +53,12 @@ Email a ser analisado:
 Assunto: {subject}
 Corpo: {body}
 """
-    response = vertex_model_instance.predict(prompt, max_output_tokens=150)
-    return response.text.strip()
+    response = genai.generate_text(
+        model="gemini-1.0-pro",  # modelo atual de texto do Vertex
+        prompt=prompt,
+        max_output_tokens=150
+    )
+    return response.result.strip()
 
 # ---------------------- Gmail API ----------------------
 def get_service():
@@ -112,7 +113,9 @@ def looks_like_brand_impersonation(display_name: str, from_addr: str) -> bool:
     name, email = parseaddr(f"{display_name} <{from_addr}>")
     ext = tldextract.extract(email.split("@")[-1]) if "@" in email else tldextract.extract("")
     root = f"{ext.domain}.{ext.suffix}".lower() if ext.suffix else ext.domain.lower()
-    suspicious_name = any(b in (name or "").lower() for b in ["google","microsoft","paypal","itau","nubank","meta","facebook","apple"])
+    suspicious_name = any(b in (name or "").lower() for b in [
+        "google","microsoft","paypal","itau","nubank","meta","facebook","apple"
+    ])
     return bool(suspicious_name and root not in BRAND_DOMAINS)
 
 # ---------------------- Phishing Score ----------------------
@@ -128,7 +131,7 @@ def phishing_score(msg):
     score = 0
     reasons = []
 
-    # Heurísticas
+    # Heurísticas básicas
     if looks_like_brand_impersonation(from_h, from_h):
         score += 2
         reasons.append("Remetente parece se passar por marca conhecida.")
