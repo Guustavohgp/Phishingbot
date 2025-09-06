@@ -12,7 +12,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-import google.generativeai as genai
+from google.oauth2 import service_account
+from google.cloud import aiplatform
 
 # ---------------------- Configurações ----------------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
@@ -22,29 +23,31 @@ VERTEX_CREDS = "vertex-ia-sa.json"
 DRY_RUN = True  # Não move emails
 
 PROJECT_ID = "gmail-anti-phishing-bot"
+REGION = "us-central1"
+VERTEX_MODEL_NAME = "text-bison@001"
 
 # ---------------------- Vertex AI ----------------------
-os.environ["GOOGLE_API_KEY"] = VERTEX_CREDS
-genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+vertex_credentials = service_account.Credentials.from_service_account_file(VERTEX_CREDS)
+aiplatform.init(project=PROJECT_ID, location=REGION, credentials=vertex_credentials)
+
+# Cria instância do modelo
+vertex_model = aiplatform.TextGenerationModel.from_pretrained(VERTEX_MODEL_NAME)
 
 def vertex_moderator(subject: str, body: str) -> str:
     """
     Vertex decide sozinho se o email é phishing.
-    Retorna 'SUSPEITO' ou 'OK' com explicação.
+    Retorna 'SUSPEITO' ou 'OK' com explicação curta.
     """
     prompt = f"""
-Você é um moderador de emails especialista em phishing. 
-Analise o email abaixo e diga apenas se ele é 'SUSPEITO' ou 'OK', explicando em 1-2 frases.
+Você é um moderador de emails especialista em phishing.
+Classifique o email como 'SUSPEITO' ou 'OK'.
+Explique em 1-2 frases rapidamente.
 
 Assunto: {subject}
 Corpo: {body}
 """
-    response = genai.generate_text(
-        model="gemini-1.0-pro",
-        prompt=prompt,
-        max_output_tokens=150
-    )
-    return response.result.strip()
+    response = vertex_model.predict(prompt, max_output_tokens=150)
+    return response.text.strip()
 
 # ---------------------- Gmail API ----------------------
 def get_service():
