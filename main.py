@@ -18,7 +18,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True  # Não move emails
+DRY_RUN = False # Não move emails   
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
