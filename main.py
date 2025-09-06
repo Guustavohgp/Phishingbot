@@ -14,29 +14,27 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from google.cloud import aiplatform
 
-# Configurações 
+# --- Configurações ---
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
+DRY_RUN = True  # Teste seguro
 
-# Modo simulação: 
-DRY_RUN = True
-
-# Heurísticas simples
+# --- Heurísticas simples ---
 SUSPICIOUS_TLDS = {"zip", "mov", "xyz", "top", "gq", "tk"}
 BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br",}
 
 # --- Vertex AI ---
 vertex_credentials = service_account.Credentials.from_service_account_file(VERTEX_CREDS)
 aiplatform.init(
-    project='gmail-anti-phishing-bot',   
-    location='us-central1',     
+    project='gmail-anti-phishing-bot',
+    location='us-central1',
     credentials=vertex_credentials
 )
-vertex_model = "text-bison@001"  
+vertex_model = "text-bison@001"
 
-# --- Funções Gmail (existentes) ---
+# --- Gmail API ---
 def get_service():
     creds = None
     if os.path.exists(TOKEN_PATH):
@@ -46,7 +44,7 @@ def get_service():
             creds.refresh(Request())
         else:
             if not os.path.exists(CREDS_PATH):
-                raise FileNotFoundError("credentials.json não encontrado na pasta do projeto.")
+                raise FileNotFoundError("credentials.json não encontrado.")
             flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(TOKEN_PATH, "w") as f:
@@ -92,71 +90,39 @@ def looks_like_brand_impersonation(display_name: str, from_addr: str) -> bool:
     suspicious_name = any(b in (name or "").lower() for b in ["google","microsoft","paypal","itau","nubank","meta","facebook","apple"])
     return bool(suspicious_name and root not in BRAND_DOMAINS)
 
-# --- Função que envia conteúdo para Vertex AI ---
-def vertex_analyze(text: str) -> str:
-    """
-    Recebe texto do email e retorna a análise da IA.
-    """
+# --- Vertex AI como moderador ---
+def vertex_moderator(subject: str, body: str) -> str:
     model = aiplatform.TextGenerationModel.from_pretrained(vertex_model)
-    response = model.predict(
-        text,
-        max_output_tokens=150
-    )
-    return response.text
+    prompt = f"""
+Você é um moderador de emails. Classifique este email como 'OK' ou 'SUSPEITO'.
+Forneça apenas a classificação e uma breve explicação.
 
-# --- Phishing score com integração Vertex ---
+Assunto: {subject}
+Corpo: {body}
+"""
+    response = model.predict(prompt, max_output_tokens=150)
+    return response.text.strip()
+
+# --- Phishing score usando Vertex AI ---
 def phishing_score(msg):
     headers = msg["payload"].get("headers", [])
-    from_h = get_header(headers, "From")
     subject = get_header(headers, "Subject")
-    authres = get_header(headers, "Authentication-Results")
-    received_spf = get_header(headers, "Received-SPF")
     body = decode_body(msg["payload"])
-    urls = extract_urls((subject or "") + "\n" + (body or ""))
 
-    score = 0
-    reasons = []
-
-    # Display name spoof
-    if looks_like_brand_impersonation(from_h, from_h):
-        score += 2; reasons.append("Remetente parece se passar por marca conhecida.")
-
-    # SPF/DKIM/DMARC (indícios)
-    if "spf=fail" in (authres or "").lower() or "fail" in (received_spf or "").lower():
-        score += 2; reasons.append("SPF falhou.")
-    if "dkim=fail" in (authres or "").lower():
-        score += 2; reasons.append("DKIM falhou.")
-    if "dmarc=fail" in (authres or "").lower() or "dmarc=reject" in (authres or "").lower():
-        score += 3; reasons.append("DMARC falhou.")
-
-    # Links suspeitos
-    for u in urls:
-        root, tld = domain_info(u)
-        if tld in SUSPICIOUS_TLDS:
-            score += 1; reasons.append(f"TLD suspeito: .{tld}")
-        if "xn--" in u:
-            score += 1; reasons.append("Domínio punycode (possível homógrafo).")
-        if any(fake in u.lower() for fake in ["secure-google.com","google.verify","account-google.","paypal-secure.","microsoft-support.","itau-verificacao.","nubank-seguro."]):
-            score += 2; reasons.append("URL imita domínio de marca.")
-
-    # Palavras-chave comuns
-    bait = ["verifique sua conta","sua senha expira","clique para atualizar","pagamento pendente","confirme seus dados","atualize suas informações","bloqueio da conta"]
-    blob = f"{subject or ''} {body or ''}".lower()
-    if any(k in blob for k in bait):
-        score += 1; reasons.append("Conteúdo com isca típica.")
-
-    # --- Vertex AI ---
     try:
-        vertex_result = vertex_analyze(subject + "\n" + body)
-        if "phishing" in vertex_result.lower() or "malicioso" in vertex_result.lower():
-            score += 3
-            reasons.append("IA Vertex identificou conteúdo suspeito.")
+        vertex_result = vertex_moderator(subject, body)
+        if "suspeito" in vertex_result.lower():
+            score = 5
+        else:
+            score = 0
+        reasons = [vertex_result]
     except Exception as e:
-        reasons.append(f"Vertex AI falhou: {e}")
+        score = 0
+        reasons = [f"Vertex AI falhou: {e}"]
 
     return score, reasons
 
-# --- Funções de Gmail para label e aplicar ---
+# --- Funções de Gmail para label ---
 def ensure_label(service, name="Quarentena-Phishing"):
     labels = service.users().labels().list(userId="me").execute().get("labels",[])
     for l in labels:
