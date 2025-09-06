@@ -14,27 +14,52 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from google.cloud import aiplatform
 
-# --- Configurações ---
+# ---------------------- Configurações ----------------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True  # Teste seguro
+DRY_RUN = True  # Teste seguro, não move emails
 
-# --- Heurísticas simples ---
 SUSPICIOUS_TLDS = {"zip", "mov", "xyz", "top", "gq", "tk"}
-BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br",}
+BRAND_DOMAINS = {"google.com","gmail.com","paypal.com","microsoft.com","apple.com","facebook.com","meta.com","nubank.com.br","itau.com.br"}
 
-# --- Vertex AI ---
+PROJECT_ID = "gmail-anti-phishing-bot"
+REGION = "us-central1"
+VERTEX_MODEL_NAME = "text-bison@001"
+
+# ---------------------- Vertex AI ----------------------
 vertex_credentials = service_account.Credentials.from_service_account_file(VERTEX_CREDS)
-aiplatform.init(
-    project='gmail-anti-phishing-bot',
-    location='us-central1',
+aiplatform.init(project=PROJECT_ID, location=REGION, credentials=vertex_credentials)
+
+# Instância única do modelo para evitar múltiplas inicializações
+vertex_model_instance = aiplatform.TextGenerationModel(
+    model_name=VERTEX_MODEL_NAME,
     credentials=vertex_credentials
 )
-vertex_model = "text-bison@001"
 
-# --- Gmail API ---
+def vertex_moderator(subject: str, body: str) -> str:
+    """
+    Analisa email e retorna 'SUSPEITO' ou 'OK' com explicação breve.
+    """
+    prompt = f"""
+Você é um moderador de emails especializado em identificar phishing. Analise o email e classifique como 'SUSPEITO' ou 'OK'.
+Inclua uma breve explicação (1-2 frases).
+
+Considere phishing qualquer tentativa de:
+- Enganar o usuário para clicar em links maliciosos
+- Solicitar dados pessoais, senhas ou informações financeiras
+- Usar linguagem de urgência ou pressão
+- Usar domínios suspeitos ou que imitam marcas
+
+Email a ser analisado:
+Assunto: {subject}
+Corpo: {body}
+"""
+    response = vertex_model_instance.predict(prompt, max_output_tokens=150)
+    return response.text.strip()
+
+# ---------------------- Gmail API ----------------------
 def get_service():
     creds = None
     if os.path.exists(TOKEN_PATH):
@@ -90,52 +115,53 @@ def looks_like_brand_impersonation(display_name: str, from_addr: str) -> bool:
     suspicious_name = any(b in (name or "").lower() for b in ["google","microsoft","paypal","itau","nubank","meta","facebook","apple"])
     return bool(suspicious_name and root not in BRAND_DOMAINS)
 
-# --- Vertex AI como moderador ---
-def vertex_moderator(subject: str, body: str) -> str:
-    """
-    Recebe assunto e corpo do email e retorna 'SUSPEITO' ou 'OK' 
-    com explicação breve, de forma geral, sem depender de marcas específicas.
-    """
-    model = aiplatform.TextGenerationModel.from_pretrained("text-bison@001")
-
-    prompt = f"""
-Você é um moderador de emails especializado em identificar phishing. Analise o email e classifique como 'SUSPEITO' ou 'OK'.
-Inclua uma breve explicação (1-2 frases).
-
-Considere phishing qualquer tentativa de:
-- Enganar o usuário para clicar em links maliciosos
-- Solicitar dados pessoais, senhas ou informações financeiras
-- Usar linguagem de urgência ou pressão
-- Usar domínios suspeitos ou que imitam marcas
-
-Email a ser analisado:
-Assunto: {subject}
-Corpo: {body}
-"""
-
-    response = model.predict(prompt, max_output_tokens=150)
-    return response.text.strip()
-
-# --- Phishing score usando Vertex AI ---
+# ---------------------- Phishing Score ----------------------
 def phishing_score(msg):
     headers = msg["payload"].get("headers", [])
+    from_h = get_header(headers, "From")
     subject = get_header(headers, "Subject")
+    authres = get_header(headers, "Authentication-Results")
+    received_spf = get_header(headers, "Received-SPF")
     body = decode_body(msg["payload"])
+    urls = extract_urls((subject or "") + "\n" + (body or ""))
 
+    score = 0
+    reasons = []
+
+    # Heurísticas
+    if looks_like_brand_impersonation(from_h, from_h):
+        score += 2
+        reasons.append("Remetente parece se passar por marca conhecida.")
+    if "spf=fail" in (authres or "").lower() or "fail" in (received_spf or "").lower():
+        score += 2
+        reasons.append("SPF falhou.")
+    if "dkim=fail" in (authres or "").lower():
+        score += 2
+        reasons.append("DKIM falhou.")
+    if "dmarc=fail" in (authres or "").lower() or "dmarc=reject" in (authres or "").lower():
+        score += 3
+        reasons.append("DMARC falhou.")
+    for u in urls:
+        root, tld = domain_info(u)
+        if tld in SUSPICIOUS_TLDS:
+            score += 1
+            reasons.append(f"TLD suspeito: .{tld}")
+        if "xn--" in u:
+            score += 1
+            reasons.append("Domínio punycode (possível homógrafo).")
+
+    # Vertex AI
     try:
         vertex_result = vertex_moderator(subject, body)
         if "suspeito" in vertex_result.lower():
-            score = 5
-        else:
-            score = 0
-        reasons = [vertex_result]
+            score += 5
+        reasons.append(f"Vertex AI: {vertex_result}")
     except Exception as e:
-        score = 0
-        reasons = [f"Vertex AI falhou: {e}"]
+        reasons.append(f"Vertex AI falhou: {e}")
 
     return score, reasons
 
-# --- Funções de Gmail para label ---
+# ---------------------- Funções de label ----------------------
 def ensure_label(service, name="Quarentena-Phishing"):
     labels = service.users().labels().list(userId="me").execute().get("labels",[])
     for l in labels:
@@ -161,7 +187,7 @@ def list_candidate_ids(service, max_results=30):
 def get_message(service, msg_id):
     return service.users().messages().get(userId="me", id=msg_id, format="full").execute()
 
-# --- Main ---
+# ---------------------- Main ----------------------
 def main():
     service = get_service()
     label_id = ensure_label(service)
