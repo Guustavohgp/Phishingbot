@@ -19,7 +19,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = False  # Teste seguro
+DRY_RUN = True # Modo Simulação 
 
 # Domínios e TLDs suspeitos
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
