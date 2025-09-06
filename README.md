@@ -29,6 +29,11 @@ No Phishing, criminosos se passam por entidades legítimas, geralmente por e-mai
 - 📝 Registro de e-mails sinalizados como phishing.
 - 🔮 Preparado para integração com IA para moderação e classificação automática.
 
+## 📦 Requisitos
+- **Python 3.9+**
+- Conta no **Google Cloud** com a **Gmail API** habilitada.
+- Pacotes Python
+
 ## 🗺️ Fluxo de Detecção
 
 ```mermaid
