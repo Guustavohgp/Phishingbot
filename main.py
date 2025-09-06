@@ -2,31 +2,32 @@ from __future__ import annotations
 import os
 import base64
 from email.utils import parseaddr
+from urllib.parse import urlparse
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
+import tldextract
+from urlextract import URLExtract
 import google.generativeai as genai
 
 # ---------------------- Configurações ----------------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
-VERTEX_CREDS = "vertex-ia-sa.json"  # JSON da service account
-DRY_RUN = True  # Teste seguro
+VERTEX_CREDS = "vertex-ia-sa.json"
+DRY_RUN = True  # Não move emails
 
-# Configure Gemini
+SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
+SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
-genai.configure(api_key=None)  # Chave é lida do JSON via GOOGLE_APPLICATION_CREDENTIALS
+genai.configure(api_key=None)
 
 # ---------------------- Vertex AI ----------------------
 def vertex_moderator(subject: str, body: str) -> str:
-    """
-    Vertex (Gemini) decide sozinho se o email é phishing.
-    Retorna 'SUSPEITO' ou 'OK' com explicação breve.
-    """
     prompt = f"""
 Você é um moderador de emails especialista em phishing.
 Classifique o email como 'SUSPEITO' ou 'OK'.
@@ -42,6 +43,33 @@ Corpo: {body}
     )
     return response.result.strip()
 
+# ---------------------- Heurísticas ----------------------
+def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
+    score = 0
+    reasons = []
+
+    text = (subject or "") + "\n" + (body or "")
+    extractor = URLExtract()
+    urls = extractor.find_urls(text)
+
+    # URLs suspeitas
+    for u in urls:
+        root, tld = tldextract.extract(u).domain + "." + tldextract.extract(u).suffix, tldextract.extract(u).suffix
+        if u in SUSPICIOUS_DOMAINS or root in SUSPICIOUS_DOMAINS:
+            score += 5
+            reasons.append(f"Domínio suspeito: {u}")
+        if tld in SUSPICIOUS_TLDS:
+            score += 1
+            reasons.append(f"TLD suspeito: .{tld}")
+
+    # Linguagem de urgência
+    urgencia = ["pague agora","bloqueio da conta","verifique sua conta","senha expirada"]
+    if any(word in text.lower() for word in urgencia):
+        score += 2
+        reasons.append("Mensagem com linguagem de urgência.")
+
+    return score, reasons
+
 # ---------------------- Gmail API ----------------------
 def get_service():
     creds = None
@@ -51,8 +79,6 @@ def get_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not os.path.exists(CREDS_PATH):
-                raise FileNotFoundError("credentials.json não encontrado.")
             flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(TOKEN_PATH, "w") as f:
@@ -62,9 +88,8 @@ def get_service():
 def decode_body(payload) -> str:
     if "data" in payload.get("body", {}):
         try:
-            data = payload["body"]["data"]
-            return base64.urlsafe_b64decode(data.encode("UTF-8")).decode("UTF-8", errors="ignore")
-        except Exception:
+            return base64.urlsafe_b64decode(payload["body"]["data"].encode("UTF-8")).decode("UTF-8", errors="ignore")
+        except:
             return ""
     text = []
     for p in payload.get("parts", []) or []:
@@ -72,8 +97,7 @@ def decode_body(payload) -> str:
     return "\n".join([t for t in text if t])
 
 def list_candidate_ids(service, max_results=30):
-    q = 'in:inbox newer_than:7d'
-    resp = service.users().messages().list(userId="me", q=q, maxResults=max_results).execute()
+    resp = service.users().messages().list(userId="me", q='in:inbox newer_than:7d', maxResults=max_results).execute()
     return [m["id"] for m in resp.get("messages", [])]
 
 def get_message(service, msg_id):
@@ -86,14 +110,14 @@ def ensure_label(service, name="Quarentena-Phishing"):
             return l["id"]
     lbl = service.users().labels().create(
         userId="me",
-        body={"name": name, "labelListVisibility":"labelShow","messageListVisibility":"show"}
+        body={"name": name,"labelListVisibility":"labelShow","messageListVisibility":"show"}
     ).execute()
     return lbl["id"]
 
 def apply_label_and_archive(service, msg_id, label_id):
     service.users().messages().modify(
         userId="me", id=msg_id,
-        body={"addLabelIds":[label_id], "removeLabelIds":["INBOX"]}
+        body={"addLabelIds":[label_id],"removeLabelIds":["INBOX"]}
     ).execute()
 
 # ---------------------- Main ----------------------
@@ -111,24 +135,30 @@ def main():
     for mid in ids:
         msg = get_message(service, mid)
         headers = msg["payload"].get("headers", [])
-        subject = next((h["value"] for h in headers if h["name"].lower() == "subject"), "")
+        subject = next((h["value"] for h in headers if h["name"].lower()=="subject"), "")
         body = decode_body(msg["payload"])
 
-        try:
-            vertex_result = vertex_moderator(subject, body)
-            score = 5 if "suspeito" in vertex_result.lower() else 0
-        except Exception as e:
-            vertex_result = f"Vertex falhou: {e}"
-            score = 0
+        # Heurísticas primeiro
+        score, reasons = check_phishing_heuristics(subject, body)
+
+        # Vertex AI se heurísticas não detectarem
+        if score < 3:
+            try:
+                vertex_result = vertex_moderator(subject, body)
+                if "suspeito" in vertex_result.lower():
+                    score += 5
+                reasons.append(f"Vertex AI: {vertex_result}")
+            except Exception as e:
+                reasons.append(f"Vertex AI falhou: {e}")
 
         snippet = msg.get("snippet","").replace("\n"," ")[:120]
 
         if score >= 3:
             if DRY_RUN:
-                print(f"[SUSPEITO] id={mid} | {vertex_result} | snippet: {snippet}")
+                print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
             else:
                 apply_label_and_archive(service, mid, label_id)
-                print(f"[QUARENTENA] id={mid} | {vertex_result} | snippet: {snippet}")
+                print(f"[QUARENTENA] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
         else:
             print(f"[OK] id={mid} | snippet: {snippet}")
 
