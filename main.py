@@ -18,10 +18,16 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True
+DRY_RUN = False  # Não move emails
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
+
+# Palavras-chave para dados pessoais ou solicitações urgentes
+SENSITIVE_KEYWORDS = [
+    "nome", "cpf", "rg", "senha", "login", "cartão", "dados bancários",
+    "informações pessoais", "prêmio", "resgatar", "pague agora", "bloqueio da conta"
+]
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
 genai.configure(api_key=None)
@@ -49,12 +55,15 @@ def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
     reasons = []
 
     text = (subject or "") + "\n" + (body or "")
+    text_lower = text.lower()
     extractor = URLExtract()
     urls = extractor.find_urls(text)
 
     # URLs suspeitas
     for u in urls:
-        root, tld = tldextract.extract(u).domain + "." + tldextract.extract(u).suffix, tldextract.extract(u).suffix
+        ext = tldextract.extract(u)
+        root = f"{ext.domain}.{ext.suffix}" if ext.suffix else ext.domain
+        tld = ext.suffix
         if u in SUSPICIOUS_DOMAINS or root in SUSPICIOUS_DOMAINS:
             score += 5
             reasons.append(f"Domínio suspeito: {u}")
@@ -62,11 +71,10 @@ def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
             score += 1
             reasons.append(f"TLD suspeito: .{tld}")
 
-    # Linguagem de urgência
-    urgencia = ["pague agora","bloqueio da conta","verifique sua conta","senha expirada"]
-    if any(word in text.lower() for word in urgencia):
-        score += 2
-        reasons.append("Mensagem com linguagem de urgência.")
+    # Linguagem de urgência ou solicitação de dados pessoais
+    if any(word in text_lower for word in SENSITIVE_KEYWORDS):
+        score += 5
+        reasons.append("Mensagem solicita dados pessoais ou informações sensíveis/urgentes.")
 
     return score, reasons
 
