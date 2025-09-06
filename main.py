@@ -3,6 +3,7 @@ import os
 import base64
 from email.utils import parseaddr
 from urllib.parse import urlparse
+from datetime import datetime
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,16 +19,21 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = False  # Não move emails
+DRY_RUN = False  # Teste seguro
 
+# Domínios e TLDs suspeitos
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
 
-# Palavras-chave para dados pessoais ou solicitações urgentes
+# Palavras-chave sensíveis
 SENSITIVE_KEYWORDS = [
     "nome", "cpf", "rg", "senha", "login", "cartão", "dados bancários",
-    "informações pessoais", "prêmio", "resgatar", "pague agora", "bloqueio da conta"
+    "informações pessoais", "prêmio", "resgatar", "pague agora", "bloqueio da conta",
+    "verifique sua conta", "confirme suas credenciais"
 ]
+
+# Histórico de análises (para aprendizado contínuo)
+HISTORIC_LOG = "phishing_history.log"
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_CREDS
 genai.configure(api_key=None)
@@ -38,14 +44,17 @@ def vertex_moderator(subject: str, body: str) -> str:
 Você é um moderador de emails especialista em phishing.
 Classifique o email como 'SUSPEITO' ou 'OK'.
 Explique em 1-2 frases rapidamente.
-
+Sempre considere phishing qualquer tentativa de:
+- Solicitar dados pessoais
+- Pressionar para pagamento ou urgência
+- Usar domínios suspeitos ou TLDs estranhos
 Assunto: {subject}
 Corpo: {body}
 """
     response = genai.generate_text(
         model="gemini-1.0-pro",
         prompt=prompt,
-        max_output_tokens=150
+        max_output_tokens=200
     )
     return response.result.strip()
 
@@ -71,10 +80,12 @@ def check_phishing_heuristics(subject: str, body: str) -> (int, list[str]):
             score += 1
             reasons.append(f"TLD suspeito: .{tld}")
 
-    # Linguagem de urgência ou solicitação de dados pessoais
-    if any(word in text_lower for word in SENSITIVE_KEYWORDS):
-        score += 5
-        reasons.append("Mensagem solicita dados pessoais ou informações sensíveis/urgentes.")
+    # Solicitação de dados pessoais ou urgência
+    for word in SENSITIVE_KEYWORDS:
+        if word in text_lower:
+            score += 5
+            reasons.append(f"Contém palavra sensível: '{word}'")
+            break  # Só precisa marcar uma vez
 
     return score, reasons
 
@@ -128,6 +139,11 @@ def apply_label_and_archive(service, msg_id, label_id):
         body={"addLabelIds":[label_id],"removeLabelIds":["INBOX"]}
     ).execute()
 
+# ---------------------- Logging ----------------------
+def log_email(subject: str, snippet: str, score: int, reasons: list[str]):
+    with open(HISTORIC_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{datetime.now()} | Score={score} | Reasons={reasons} | Subject={subject[:50]} | Snippet={snippet}\n")
+
 # ---------------------- Main ----------------------
 def main():
     service = get_service()
@@ -145,12 +161,13 @@ def main():
         headers = msg["payload"].get("headers", [])
         subject = next((h["value"] for h in headers if h["name"].lower()=="subject"), "")
         body = decode_body(msg["payload"])
+        snippet = msg.get("snippet","").replace("\n"," ")[:120]
 
-        # Heurísticas primeiro
+        # Heurísticas
         score, reasons = check_phishing_heuristics(subject, body)
 
         # Vertex AI se heurísticas não detectarem
-        if score < 3:
+        if score < 5:
             try:
                 vertex_result = vertex_moderator(subject, body)
                 if "suspeito" in vertex_result.lower():
@@ -159,9 +176,11 @@ def main():
             except Exception as e:
                 reasons.append(f"Vertex AI falhou: {e}")
 
-        snippet = msg.get("snippet","").replace("\n"," ")[:120]
+        # Log histórico
+        log_email(subject, snippet, score, reasons)
 
-        if score >= 3:
+        # Decisão final
+        if score >= 5:
             if DRY_RUN:
                 print(f"[SUSPEITO] id={mid} | {', '.join(reasons)} | snippet: {snippet}")
             else:
