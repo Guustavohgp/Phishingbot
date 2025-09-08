@@ -29,4 +29,6 @@ tfidf_vectorizer.pkl
 # Phishing
 phishing_model.pkl
 
-
+# Imagens
+image-1.png
+image.png

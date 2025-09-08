@@ -64,9 +64,17 @@ No Phishing, criminosos se passam por entidades legítimas, geralmente por e-mai
 
 ---
 
-## 📊 Exemplo de Saída
+## 📊 Gmail
 
-![Exemplo de detecção](image.png)
+O sistema acessa sua caixa de entrada do Gmail, analisa os emails e classifica automaticamente os que forem suspeitos.
+Todos os emails detectados como phishing são movidos para uma label exclusiva chamada “Quarentena Phishing”.
+
+
+- **Caixa de entrada:**
+![alt text](image-1.png)
+
+- **Quarentena Phishing:**
+![alt text](image.png)
 
 ---
 
