@@ -77,10 +77,12 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 
 - **Caixa de entrada:**
-![alt text](image-1.png)
+<img width="1828" height="697" alt="image" src="https://github.com/user-attachments/assets/38622441-639e-4ad0-97ea-a5301689a5e2" />
+
 
 - **Quarentena Phishing:**
-![alt text](image.png)
+<img width="1827" height="698" alt="image" src="https://github.com/user-attachments/assets/40b3ec2a-12ee-4bf0-a160-f921088228b5" />
+
 
 ---
 
@@ -90,20 +92,4 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 - Aprimoramento contínuo do modelo ML com **novos datasets**  
 - Suporte a **outros provedores de e-mail** e alertas corporativos  
 
----
 
-## 🗺️ Fluxo de Detecção
-
-```mermaid
-flowchart TD
-    A[📥 Receber E-mails] --> B{O remetente é confiável?}
-    B -- Sim --> C[📌 Classificar como seguro]
-    B -- Não --> D{Domínio na lista suspeita?}
-    D -- Sim --> E[🚨 Marcar como phishing]
-    D -- Não --> F[🔍 Analisar padrões]
-    F -- Suspeito --> E
-    F -- Seguro --> C
-    E --> G[📝 Registrar e alertar]
-    C --> H[✅ Finalizar verificação]
-
-    ---
