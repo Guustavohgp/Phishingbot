@@ -28,11 +28,11 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 TOKEN_PATH = "token.json"
 CREDS_PATH = "credentials.json"
 VERTEX_CREDS = "vertex-ia-sa.json"
-DRY_RUN = True
+DRY_RUN = False # Modo simulação = True, não move e-mails
 
 MODEL_PATH = "phishing_model.pkl"
 VECTORIZER_PATH = "tfidf_vectorizer.pkl"
-THRESHOLD = 0.7
+THRESHOLD = 0.7 # Calibração de phishing
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
