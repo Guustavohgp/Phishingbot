@@ -60,8 +60,14 @@ No Phishing, criminosos se passam por entidades legítimas, geralmente por e-mai
 
 - **Python 3.9+**  
 - Conta **Google Cloud** com **Gmail API** habilitada  
-- Dataset de phishing  
+- **Dataset** de phishing (CSV)
+- **Instalar** dependências listadas no requirements.txt:
+    - Comando: **pip install -r requirements.txt** 
 
+- Arquivos de autenticação:
+    - **token.json** (gerado após autorizar acesso à Gmail API)
+    - **credentials.json** (credenciais do OAuth da Gmail API)
+    - **vertex.json** (credenciais para Vertex AI / Gemini)
 ---
 
 ## 📊 Gmail
