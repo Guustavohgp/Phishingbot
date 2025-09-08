@@ -8,9 +8,6 @@ __pycache__/
 # Vscode
 .vscode/
 
-# Requirements
-requirements.txt
-
 # Secrets
 *.env
 client_secret_*.json
@@ -26,5 +23,12 @@ iniciar.txt
 #Vertex
 vertex-ia-sa.json
 
-#Histórico Phishing
-phishing_history.log
+# TFIDF
+tfidf_vectorizer.pkl
+
+# Phishing
+phishing_model.pkl
+
+# Imagens
+image-1.png
+image.png
