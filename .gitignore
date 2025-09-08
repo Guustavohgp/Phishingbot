@@ -8,9 +8,6 @@ __pycache__/
 # Vscode
 .vscode/
 
-# Requirements
-requirements.txt
-
 # Secrets
 *.env
 client_secret_*.json
