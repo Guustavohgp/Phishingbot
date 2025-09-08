@@ -23,5 +23,9 @@ iniciar.txt
 #Vertex
 vertex-ia-sa.json
 
-#Histórico Phishing
-phishing_history.log
+# TFIDF
+tfidf_vectorizer.pkl
+
+# Phishing
+phishing_model.pkl
+
