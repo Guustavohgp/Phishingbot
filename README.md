@@ -83,6 +83,11 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 - **Quarentena Phishing:**
 <img width="1827" height="698" alt="image" src="https://github.com/user-attachments/assets/40b3ec2a-12ee-4bf0-a160-f921088228b5" />
 
+---
+
+# 📝 Exemplo de saída no terminal
+
+<img width="1613" height="149" alt="image" src="https://github.com/user-attachments/assets/d441a39f-7fe9-4305-ad8c-dfb28f2ae019" />
 
 ---
 
