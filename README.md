@@ -77,6 +77,40 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 
 - **Caixa de entrada:**
+![alt text](image-1.png)
+
+- **Quarentena Phishing:**
+![alt text](image.png)
+
+---
+
+## 🔮 Próximos Passos
+
+- Dashboard em tempo real com **métricas de segurança**  
+- Aprimoramento contínuo do modelo ML com **novos datasets**  
+- Suporte a **outros provedores de e-mail** e alertas corporativos  
+
+---
+
+- **Python 3.9+**  
+- Conta **Google Cloud** com **Gmail API** habilitada  
+- **Dataset** de phishing (CSV)
+- **Instalar** dependências listadas no requirements.txt:
+    - Comando: **pip install -r requirements.txt** 
+
+- Arquivos de autenticação:
+    - **token.json** (gerado após autorizar acesso à Gmail API)
+    - **credentials.json** (credenciais do OAuth da Gmail API)
+    - **vertex.json** (credenciais para Vertex AI / Gemini)
+---
+
+## 📊 Gmail
+
+O sistema acessa sua caixa de entrada do Gmail, analisa os emails e classifica automaticamente os que forem suspeitos.
+Todos os emails detectados como phishing são movidos para uma label exclusiva chamada “Quarentena Phishing”.
+
+
+- **Caixa de entrada:**
 <img width="1828" height="697" alt="image" src="https://github.com/user-attachments/assets/38622441-639e-4ad0-97ea-a5301689a5e2" />
 
 
@@ -98,3 +132,16 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 - Suporte a **outros provedores de e-mail** e alertas corporativos  
 
 
+```mermaid
+flowchart TD
+    A[📥 Receber E-mails] --> B{O remetente é confiável?}
+    B -- Sim --> C[📌 Classificar como seguro]
+    B -- Não --> D{Domínio na lista suspeita?}
+    D -- Sim --> E[🚨 Marcar como phishing]
+    D -- Não --> F[🔍 Analisar padrões]
+    F -- Suspeito --> E
+    F -- Seguro --> C
+    E --> G[📝 Registrar e alertar]
+    C --> H[✅ Finalizar verificação]
+
+    ---
