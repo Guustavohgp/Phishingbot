@@ -92,7 +92,45 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 ---
 
-## 🗺️ Fluxo de Detecção
+- **Python 3.9+**  
+- Conta **Google Cloud** com **Gmail API** habilitada  
+- **Dataset** de phishing (CSV)
+- **Instalar** dependências listadas no requirements.txt:
+    - Comando: **pip install -r requirements.txt** 
+
+- Arquivos de autenticação:
+    - **token.json** (gerado após autorizar acesso à Gmail API)
+    - **credentials.json** (credenciais do OAuth da Gmail API)
+    - **vertex.json** (credenciais para Vertex AI / Gemini)
+---
+
+## 📊 Gmail
+
+O sistema acessa sua caixa de entrada do Gmail, analisa os emails e classifica automaticamente os que forem suspeitos.
+Todos os emails detectados como phishing são movidos para uma label exclusiva chamada “Quarentena Phishing”.
+
+
+- **Caixa de entrada:**
+<img width="1828" height="697" alt="image" src="https://github.com/user-attachments/assets/38622441-639e-4ad0-97ea-a5301689a5e2" />
+
+
+- **Quarentena Phishing:**
+<img width="1827" height="698" alt="image" src="https://github.com/user-attachments/assets/40b3ec2a-12ee-4bf0-a160-f921088228b5" />
+
+---
+
+# 📝 Exemplo de saída no terminal
+
+<img width="1613" height="149" alt="image" src="https://github.com/user-attachments/assets/d441a39f-7fe9-4305-ad8c-dfb28f2ae019" />
+
+---
+
+## 🔮 Próximos Passos
+
+- Dashboard em tempo real com **métricas de segurança**  
+- Aprimoramento contínuo do modelo ML com **novos datasets**  
+- Suporte a **outros provedores de e-mail** e alertas corporativos  
+
 
 ```mermaid
 flowchart TD
