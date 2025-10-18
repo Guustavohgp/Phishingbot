@@ -9,7 +9,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 # Paths (assumindo que credentials/token estão na raiz do projeto)
 TOKEN_PATH = os.path.join(PROJECT_ROOT, "token.json")
-CREDS_PATH = os.path.join(PROJECT_ROOT, "credentials.json")
+CREDS_PATH = os.path.join(BASE_DIR, "credentials.json")
 VERTEX_CREDS = os.path.join(PROJECT_ROOT, "vertex-ia-sa.json")
 
 # Model paths
