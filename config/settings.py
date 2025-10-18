@@ -21,7 +21,7 @@ DATASETS_FOLDER = os.path.join(PROJECT_ROOT, "datasets", "phishing_dataset")
 
 # Comportamento
 THRESHOLD = 0.7
-DRY_RUN = True # padrão seguro: True -> não move e-mails
+DRY_RUN = False # padrão seguro: True -> não move e-mails
 
 SUSPICIOUS_TLDS = {"zip","mov","xyz","top","gq","tk"}
 SUSPICIOUS_DOMAINS = {"itau-fatura.com", "google-conta.com"}
