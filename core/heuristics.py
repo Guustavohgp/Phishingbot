@@ -14,7 +14,9 @@ try:
 except Exception:
     settings = None
 
-# Valores padrão
+# -------------------------
+# Configurações padrão
+# -------------------------
 DEFAULT_CONFIG = SimpleNamespace(
     SUSPICIOUS_DOMAINS=set(["malicious.com", "phish.example", "regularizarcnh"]),
     SUSPICIOUS_TLDS=set(["xyz", "top", "club", "loan", "click"]),
@@ -31,7 +33,7 @@ DEFAULT_CONFIG = SimpleNamespace(
 )
 
 # -------------------------
-# Load config
+# Carregar configurações
 # -------------------------
 def _get_config():
     if settings is None:
@@ -126,42 +128,39 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
     logger.debug("Detected URLs: %s", urls)
 
     # análise de URLs
-    for i, u in enumerate(urls):
-        # limpeza e normalização para parsing
+    for u in urls:
         u_raw = u.strip().strip(".,;:()[]<>\"'")
         u_for_parse = u_raw
         if not re.match(r"^[a-z]+://", u_for_parse):
-            u_for_parse = "http://" + u_for_parse  # só para urlparse/tldextract
+            u_for_parse = "http://" + u_for_parse
 
-        # detecta IP-style link (com ou sem esquema adicionado)
+        # IP-style links
         if re.match(r"https?://\d{1,3}(?:\.\d{1,3}){3}", u_for_parse) or re.match(r"^\d{1,3}(?:\.\d{1,3}){3}(?:/|$)", u_raw):
             score += 5
             reasons_set.add(f"URL com IP: {u_raw}")
             features["has_ip_link"] = 1
 
-        # tldextract e components
+        # tldextract
         try:
             ext = tldextract.extract(u_for_parse)
             domain = (ext.domain or "").lower()
             suffix = (ext.suffix or "").lower()
-            subdomain = (ext.subdomain or "").lower()
             root = f"{domain}.{suffix}" if domain and suffix else domain
         except Exception:
             domain = ""
             suffix = ""
-            subdomain = ""
             root = u_raw.lower()
 
-        # heurísticas de domínio/TLD (comparações em lowercase)
-        if root and root in {d.lower() for d in config.SUSPICIOUS_DOMAINS}:
+        # heurísticas de domínio/TLD
+        if root in {d.lower() for d in config.SUSPICIOUS_DOMAINS}:
             score += 5
             reasons_set.add(f"Domínio suspeito: {root}")
             features["has_suspicious_domain"] = 1
-        if suffix and suffix in {t.lower() for t in config.SUSPICIOUS_TLDS}:
+        if suffix in {t.lower() for t in config.SUSPICIOUS_TLDS}:
             score += 2
             reasons_set.add(f"TLD suspeito: .{suffix}")
             features["has_suspicious_tld"] = 1
-        if root and root in {s.lower() for s in config.SHORTENERS}:
+        if root in {s.lower() for s in config.SHORTENERS}:
             score += 3
             reasons_set.add(f"Encurtador detectado: {root}")
             features["has_shortener"] = 1
@@ -170,7 +169,7 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
             reasons_set.add(f"Domínio genérico suspeito: {domain}")
             features["has_suspicious_domain"] = 1
 
-        # path-based tricks (comparações em lowercase)
+        # path tricks
         path = _extract_path_after_domain(u_for_parse).lower()
         for brand in {b.lower() for b in config.SUSPICIOUS_BRAND_WORDS}:
             if brand in path and brand not in (root or ""):
@@ -179,17 +178,15 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
                 features["path_brand_mismatch"] = 1
                 break
 
-        # path que contém padrão de domínio (ex: /pague.com)
         if re.search(r"/[a-z0-9\-]+\.[a-z]{2,4}($|/)", path):
             score += 3
             reasons_set.add(f"Path contendo padrão de domínio: {u_raw}")
 
-        # procurar caracteres não-ascii dentro da URL (homoglyphs) — menos falso positivo que procurar no corpo todo
         if re.search(r"[^\x00-\x7F]", u_raw):
             score += 1
             reasons_set.add(f"Caracteres não-ASCII na URL: {u_raw}")
 
-    # textual heuristics (fora das URLs)
+    # textual heuristics
     if any(pat in text_lower for pat in {p.lower() for p in config.URGENCY_PATTERNS}):
         score += 4
         reasons_set.add("Mensagem com tom de urgência ou bloqueio")
@@ -201,12 +198,6 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
             reasons_set.add("Solicita dados sensíveis em contexto de ação")
             features["has_sensitive_request"] = 1
 
-    # outros sinais (corpo)
-    # manter penalidade leve para caracteres não-ASCII no corpo (opcional): comentado para reduzir FPs
-    # if re.search(r"[^\x00-\x7F]", text):
-    #     score += 1
-    #     reasons_set.add("Caracteres não-ASCII detectados no corpo (possível homoglyph)")
-
     if features["num_links"] >= 2:
         score += 1
         reasons_set.add(f"{features['num_links']} links detectados")
@@ -215,11 +206,8 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
         score += 1
         reasons_set.add("Uso excessivo de EXCLAMAÇÕES/MAIÚSCULAS")
 
-    # transformar reasons_set em lista ordenada (para estabilidade)
     reasons = sorted(reasons_set)
-
     logger.debug("Heuristic score: %s, reasons: %s, features: %s", score, reasons, features)
-
     return score, reasons, features
 
 # -------------------------
@@ -244,7 +232,6 @@ def classify_email(subject: str, body: str, ml_result: dict = None, config: Simp
         except Exception:
             conf = 0.0
         details["ml_confidence"] = conf
-
         if ml_label in ("SUSPEITO", "PHISHING") and conf >= 85.0:
             return "PHISHING", details
         elif ml_label in ("SUSPEITO", "PHISHING") and conf >= 70.0:
