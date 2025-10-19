@@ -1,4 +1,4 @@
-# core/heuristics.py
+#heuristics
 import re
 import logging
 from types import SimpleNamespace
@@ -14,25 +14,71 @@ try:
 except Exception:
     settings = None
 
-# Valores padrão
+# Valores padrão 
 DEFAULT_CONFIG = SimpleNamespace(
-    SUSPICIOUS_DOMAINS=set(["malicious.com", "phish.example", "regularizarcnh"]),
-    SUSPICIOUS_TLDS=set(["xyz", "top", "club", "loan", "click"]),
-    SENSITIVE_KEYWORDS=set(["cpf", "senha", "cartão", "cartao", "dados", "pix", "informações", "conta"]),
-    SHORTENERS=set(["bit.ly", "tinyurl.com", "is.gd", "t.co", "ow.ly", "buff.ly", "cutt.ly"]),
-    SUSPICIOUS_BRAND_WORDS=set(["cnh", "detran", "receita", "banco", "itau", "bb", "caixa", "gov", "senha", "login", "seguro", "pagamento", "regularizar"]),
+    SUSPICIOUS_DOMAINS=set([
+        "malicious.com", "phish.example", "regularizarcnh", "gov-br.site", "govbr-login.com",
+        "govbrseguro.com", "br-gov.net", "brgov.app", "brgovseguro.com", "cnhregulariza.com",
+        "cnhdigitalbrasil.net", "receita-federal.online", "itau-verifica.com", "bbseguro.click",
+        "caixalogin.net", "sistemagov.com", "govbr-autenticacao.com", "pixseguro.com", "meupix.app",
+        "recuperarconta.net", "multastransito.click", "suporte-banco.com", "meupagamento.info",
+        "pagamentosseguro.online", "pixverifica.net", "loginpixbr.com"
+    ]),
+
+    SUSPICIOUS_TLDS=set([
+        "xyz", "top", "club", "loan", "click", "online", "shop", "store", "info", "live", "site",
+        "fun", "buzz", "monster", "space", "tk", "ml", "ga", "gq", "cf", "pw", "cam", "work", "zip",
+        "mov", "rest", "country", "biz", "pro", "app", "icu", "cyou", "press", "review"
+    ]),
+
+    SENSITIVE_KEYWORDS=set([
+        "cpf", "senha", "cartão", "cartao", "pix", "dados", "informações", "informacao", "conta",
+        "banco", "acesso", "token", "segurança", "codigo", "verificação", "confirmacao", "2fa",
+        "autenticacao", "login", "credenciais", "transferência", "transacao", "pagamento",
+        "chave", "saldo", "limite", "bloqueio", "extrato", "validação", "validar", "recuperar senha",
+        "verificar", "atualizar dados", "autenticar", "documento", "comprovante"
+    ]),
+
+    SHORTENERS=set([
+        "bit.ly", "tinyurl.com", "is.gd", "t.co", "ow.ly", "buff.ly", "cutt.ly", "shorturl.at",
+        "rebrand.ly", "shorte.st", "soo.gd", "adf.ly", "ulvis.net", "v.gd", "lnkd.in", "qr.ae",
+        "tiny.cc", "rb.gy", "trib.al", "1drv.ms", "goo.gl"
+    ]),
+
+    SUSPICIOUS_BRAND_WORDS=set([
+        "cnh", "detran", "receita", "banco", "itau", "bradesco", "santander", "bb", "caixa", "gov",
+        "govbr", "pix", "pagbank", "mercadopago", "mercadolivre", "nubank", "inter", "original",
+        "sicoob", "sicredi", "neon", "trigg", "ame", "celcoin", "picpay", "paypal", "pagseguro",
+        "serasa", "spc", "celular", "portabilidade", "seguro", "pagamento", "boleto", "cobranca",
+        "regularizar", "multas", "renovar", "ipva", "licenciamento", "suspensao", "bloqueio",
+        "recuperar", "restituicao", "nota fiscal"
+    ]),
+
     URGENCY_PATTERNS=[
         "pague agora", "pague agora mesmo", "regularizar cnh", "bloqueada", "bloqueio",
         "para desbloquear", "pendente", "expirada", "ultima chance", "última chance",
-        "link abaixo", "imediatamente", "urgente", "multas", "tempo limite", "tempo limite:"
+        "link abaixo", "imediatamente", "urgente", "multas", "tempo limite", "tempo limite:",
+        "evite suspensão", "seu acesso será bloqueado", "evite bloqueio", "regularize hoje",
+        "evite multa", "atualize antes do prazo", "prazo final", "expira em", "último aviso",
+        "encerramento", "seu cadastro expirou", "renove já", "urgente: ação necessária",
+        "evite cancelamento", "não perca o prazo", "confirme imediatamente", "prazo termina hoje"
     ],
-    CONTEXT_WORDS=["envie", "informe", "confirme", "forneça", "forneca", "atualize", "verifique", "acesse", "clique"],
-    DEFAULT_THRESHOLDS=SimpleNamespace(QUARANTINE_SCORE=6, SUSPECT_SCORE=3),
+
+    CONTEXT_WORDS=[
+        "envie", "informe", "confirme", "forneça", "forneca", "atualize", "verifique",
+        "acesse", "clique", "autorize", "entre no link", "faça login", "acesse sua conta",
+        "clique no botão", "envie seus dados", "preencha o formulário", "siga o link",
+        "acesse o site", "resolva agora", "regularize aqui", "verifique seus dados",
+        "valide suas informações", "recupere sua conta", "baixe o aplicativo", "acesse com segurança"
+    ],
+
+    DEFAULT_THRESHOLDS=SimpleNamespace(
+        QUARANTINE_SCORE=6,
+        SUSPECT_SCORE=3
+    ),
 )
 
-# -------------------------
 # Load config
-# -------------------------
 def _get_config():
     if settings is None:
         return DEFAULT_CONFIG
@@ -47,9 +93,8 @@ def _get_config():
     cfg.DEFAULT_THRESHOLDS = getattr(settings, "DEFAULT_THRESHOLDS", DEFAULT_CONFIG.DEFAULT_THRESHOLDS)
     return cfg
 
-# -------------------------
+
 # Utilities
-# -------------------------
 _url_extractor = URLExtract()
 
 def _normalize_text(text: str) -> str:
@@ -82,9 +127,7 @@ def _extract_path_after_domain(raw_url: str):
     except Exception:
         return ""
 
-# -------------------------
 # Heurística
-# -------------------------
 def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace = None):
     """
     Retorna: score:int, reasons:list[str], features:dict
@@ -217,9 +260,8 @@ def check_phishing_heuristics(subject: str, body: str, config: SimpleNamespace =
 
     return score, reasons, features
 
-# -------------------------
+
 # Integração heurística + ML
-# -------------------------
 def classify_email(subject: str, body: str, ml_result: dict = None, config: SimpleNamespace = None):
     if config is None:
         config = _get_config()
@@ -251,12 +293,3 @@ def classify_email(subject: str, body: str, ml_result: dict = None, config: Simp
 
     return "OK", details
 
-# -------------------------
-# Teste rápido
-# -------------------------
-if __name__ == "__main__":
-    subj = "Sua CNH foi bloqueada!"
-    body = "Pague agora para desbloquear: www.regularizarcnh/pague.com"
-    lbl, det = classify_email(subj, body)
-    print("LABEL:", lbl)
-    print("DETAILS:", det)
