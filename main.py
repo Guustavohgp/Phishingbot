@@ -9,12 +9,19 @@ from core.gmail_service import (
 )
 from config import settings
 
+MAX_SNIPPET_LEN = 120  # comprimento máximo do snippet para log
+MAX_REASON_LEN = 150   # comprimento máximo de cada reason
+
+def truncate_text(text, length):
+    """Trunca texto com reticências se exceder o tamanho."""
+    return text if len(text) <= length else text[:length] + "..."
 
 def main():
     logger = get_logger("main")
 
     folder_path = os.path.join("datasets", "phishing_dataset")
 
+    # Treina modelo se necessário
     if not os.path.exists(settings.MODEL_PATH) or not os.path.exists(settings.VECTORIZER_PATH):
         logger.info("Treinando modelo com 4 features extras...")
         train_model(folder_path)
@@ -37,35 +44,54 @@ def main():
         body = decode_body(msg["payload"])
         text_full = subject + "\n" + body
 
-        score, reasons = check_phishing_heuristics(subject, body)
+        # -----------------------
+        # Heurística
+        # -----------------------
+        score, reasons, features = check_phishing_heuristics(subject, body)
 
+        # -----------------------
+        # ML
+        # -----------------------
+        ml_reason = ""
         try:
             model_result = predict_email_model(text_full, clf, vectorizer)
             if model_result["resultado"] == "SUSPEITO" and (
-                model_result["features"]["has_link"] or model_result["features"]["has_suspicious_words"]
+                model_result["features"].get("has_link") or model_result["features"].get("has_suspicious_words")
             ):
                 score += 5
-            reasons.append(f"Modelo ML: {model_result}")
+            ml_reason = f"ML: {truncate_text(str(model_result), MAX_REASON_LEN)}"
+            reasons.append(ml_reason)
         except Exception as e:
-            reasons.append(f"Erro modelo ML: {e}")
+            ml_reason = f"ML erro: {e}"
+            reasons.append(ml_reason)
 
+        # -----------------------
+        # Vertex AI
+        # -----------------------
+        vertex_reason = ""
         if score < 5:
             try:
                 vertex_result = vertex_moderator(subject, body)
                 if "suspeito" in vertex_result.lower():
                     score += 5
-                reasons.append(f"Vertex AI: {vertex_result}")
+                vertex_reason = f"Vertex AI: {truncate_text(vertex_result, MAX_REASON_LEN)}"
+                reasons.append(vertex_reason)
             except Exception as e:
-                reasons.append(f"Vertex AI falhou: {e}")
+                vertex_reason = f"Vertex AI falhou: {e}"
+                reasons.append(vertex_reason)
 
-        snippet = msg.get("snippet", "").replace("\n", " ")[:120]
+        # -----------------------
+        # Log final
+        # -----------------------
+        snippet = truncate_text(msg.get("snippet", "").replace("\n", " "), MAX_SNIPPET_LEN)
+        reasons_str = "; ".join([truncate_text(r, MAX_REASON_LEN) for r in reasons])
 
         if score >= 5:
             if settings.DRY_RUN:
-                logger.info(f"[SUSPEITO] {mid} | {', '.join(reasons)} | {snippet}")
+                logger.info(f"[SUSPEITO] {mid} | {reasons_str} | {snippet}")
             else:
                 apply_label_and_archive(service, mid, label_id)
-                logger.warning(f"[QUARENTENA] {mid} | {', '.join(reasons)} | {snippet}")
+                logger.warning(f"[QUARENTENA] {mid} | {reasons_str} | {snippet}")
         else:
             logger.info(f"[OK] {mid} | {snippet}")
 
