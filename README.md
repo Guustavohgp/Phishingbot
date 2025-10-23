@@ -84,24 +84,18 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 ---
 
+## Log
+
+![alt text](image-2.png)
+
+---
+
 ## 🔮 Próximos Passos
 
 - Dashboard em tempo real com **métricas de segurança**  
 - Aprimoramento contínuo do modelo ML com **novos datasets**  
 - Suporte a **outros provedores de e-mail** e alertas corporativos  
 
----
-
-- **Python 3.9+**  
-- Conta **Google Cloud** com **Gmail API** habilitada  
-- **Dataset** de phishing (CSV)
-- **Instalar** dependências listadas no requirements.txt:
-    - Comando: **pip install -r requirements.txt** 
-
-- Arquivos de autenticação:
-    - **token.json** (gerado após autorizar acesso à Gmail API)
-    - **credentials.json** (credenciais do OAuth da Gmail API)
-    - **vertex.json** (credenciais para Vertex AI / Gemini)
 ---
 
 ```mermaid
