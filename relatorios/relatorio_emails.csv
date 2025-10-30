@@ -1,0 +1,15 @@
+﻿tipo;data;hora;mensagem
+suspeito;2025-10-26;16:51:22;palavra suspeita 'bb' encontrada no path de customer.io
+suspeito;2025-10-26;16:51:22;palavra suspeita 'bb' encontrada no path de c.gle
+suspeito;2025-10-26;16:51:23;palavra suspeita 'bb' encontrada no path de c.gle
+ok;2025-10-26;16:51:23;main |   | Olá, Jorge! Tudo bem? Venho lhe convidar para meu aniversário hoje às...
+suspeito;2025-10-26;17:15:48;palavra suspeita 'bb' encontrada no path de customer.io
+suspeito;2025-10-26;17:15:48;palavra suspeita 'bb' encontrada no path de c.gle
+suspeito;2025-10-26;17:15:49;palavra suspeita 'bb' encontrada no path de c.gle
+ok;2025-10-26;17:15:49;main |   | Olá, Jorge! Tudo bem? Venho lhe convidar para meu aniversário hoje às...
+suspeito;2025-10-30;08:59:22;palavra suspeita 'inter' encontrada no path de gstatic.com
+suspeito;2025-10-30;08:59:22;palavra suspeita 'bb' encontrada no path de customer.io
+suspeito;2025-10-30;08:59:23;palavra suspeita 'bb' encontrada no path de c.gle
+suspeito;2025-10-30;09:14:09;palavra suspeita 'inter' encontrada no path de gstatic.com
+suspeito;2025-10-30;09:14:10;palavra suspeita 'bb' encontrada no path de customer.io
+suspeito;2025-10-30;09:14:10;palavra suspeita 'bb' encontrada no path de c.gle
