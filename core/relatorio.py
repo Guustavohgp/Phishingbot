@@ -2,13 +2,10 @@ import re
 import os
 import pandas as pd
 from collections import Counter
-import matplotlib.pyplot as plt # type: ignore
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="relatorios"):
-    """
-    Gera relatório completo com gráficos e dashboard HTML.
-    """
     os.makedirs(pasta_saida, exist_ok=True)
 
     total_emails = 0
@@ -16,9 +13,10 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     registros = []
     niveis = Counter()
 
+    # Regex ampliado para capturar qualquer tipo de tag entre colchetes
+    padrao_tag = re.compile(r"\[([A-Z]+)\]", re.IGNORECASE)
     padrao_suspeito = re.compile(r"\[SUSPEITO\]|\[QUARENTENA\]", re.IGNORECASE)
     padrao_ok = re.compile(r"\[OK\]", re.IGNORECASE)
-    padrao_nivel = re.compile(r"\[(INFO|WARNING|ERROR|DEBUG)\]")
 
     with open(caminho_log, "r", encoding="utf-8") as f:
         for linha in f:
@@ -26,10 +24,10 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
             if not linha:
                 continue
 
-            # Conta níveis
-            m_nivel = padrao_nivel.search(linha)
-            if m_nivel:
-                niveis[m_nivel.group(1)] += 1
+            # Captura o tipo de log entre colchetes
+            m = padrao_tag.findall(linha)
+            for tag in m:
+                niveis[tag.upper()] += 1
 
             if padrao_suspeito.search(linha):
                 suspeitos += 1
@@ -40,60 +38,61 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
                 registros.append({"tipo": "ok", "linha": linha})
 
     if total_emails == 0:
-        print("Nenhum email encontrado nos logs.")
+        print("Nenhum e-mail encontrado nos logs.")
         return
 
     porcentagem_suspeitos = (suspeitos / total_emails) * 100
     porcentagem_ok = 100 - porcentagem_suspeitos
 
-    # -------------------------------
-    # Salvar CSV
-    # -------------------------------
     df = pd.DataFrame(registros)
     csv_path = os.path.join(pasta_saida, "relatorio_emails.csv")
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
-    # -------------------------------
-    # Gráficos
-    # -------------------------------
+    # ---------------------------
+    # GRÁFICO DE PIZZA
+    # ---------------------------
     grafico_pizza = os.path.join(pasta_saida, "grafico_pizza.png")
-    grafico_barras = os.path.join(pasta_saida, "grafico_barras.png")
-
-    # Pizza: proporção suspeitos x normais
     plt.figure(figsize=(4, 4))
     plt.pie(
         [suspeitos, total_emails - suspeitos],
         labels=["Suspeitos", "Normais"],
         autopct="%1.1f%%",
-        startangle=140
+        startangle=140,
+        colors=["#e84118", "#44bd32"]
     )
     plt.title("Proporção de e-mails suspeitos")
     plt.savefig(grafico_pizza, bbox_inches="tight")
     plt.close()
 
-    # Barras: níveis de log (com fallback)
+    # ---------------------------
+    # GRÁFICO DE BARRAS
+    # ---------------------------
+    grafico_barras = os.path.join(pasta_saida, "grafico_barras.png")
     plt.figure(figsize=(6, 4))
 
-    # Níveis padrão
-    niveis_padrao = ["INFO", "WARNING", "ERROR", "DEBUG"]
-    valores = [niveis.get(n, 0) for n in niveis_padrao]
+    # Se não houver níveis, adiciona um placeholder
+    if not niveis:
+        niveis = Counter({"SEM NÍVEL": 1})
 
-    plt.bar(niveis_padrao, valores, color="#40739e")
+    nomes = list(niveis.keys())
+    valores = list(niveis.values())
+
+    plt.bar(nomes, valores, color="#487eb0")
     plt.title("Distribuição dos níveis de log")
     plt.xlabel("Nível")
     plt.ylabel("Quantidade")
 
-    # Adiciona rótulos de valor acima das barras
     for i, v in enumerate(valores):
         plt.text(i, v + 0.1, str(v), ha="center", fontweight="bold")
 
-    plt.ylim(0, max(valores + [1]) * 1.2)
+    plt.ylim(0, max(valores) * 1.2)
+    plt.tight_layout()
     plt.savefig(grafico_barras, bbox_inches="tight")
     plt.close()
 
-    # -------------------------------
-    # Dashboard HTML
-    # -------------------------------
+    # ---------------------------
+    # DASHBOARD HTML
+    # ---------------------------
     html_path = os.path.join(pasta_saida, "dashboard_emails.html")
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -109,9 +108,7 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
                 background-color: #f5f6fa;
                 color: #2f3640;
             }}
-            h1 {{
-                color: #273c75;
-            }}
+            h1 {{ color: #273c75; }}
             .card {{
                 background: white;
                 border-radius: 12px;
@@ -173,7 +170,6 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     print(f"Relatório CSV salvo em: {csv_path}")
     print(f"Dashboard HTML salvo em: {html_path}")
     print(f"Gráficos: {grafico_pizza}, {grafico_barras}")
-
 
 if __name__ == "__main__":
     gerar_relatorio_completo()

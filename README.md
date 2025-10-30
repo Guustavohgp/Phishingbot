@@ -90,6 +90,16 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 ---
 
+## Exemplo de Saída:
+
+![alt text](image-3.png)
+
+![alt text](image-4.png)
+
+![alt text](image-5.png)
+
+---
+
 ## 🔮 Próximos Passos
 
 - Dashboard em tempo real com **métricas de segurança**  
