@@ -5,7 +5,11 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+
 def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="relatorios"):
+    """
+    Gera relatório completo com gráficos, CSV formatado e dashboard HTML.
+    """
     os.makedirs(pasta_saida, exist_ok=True)
 
     total_emails = 0
@@ -13,7 +17,7 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     registros = []
     niveis = Counter()
 
-    # Regex ampliado para capturar qualquer tipo de tag entre colchetes
+    # Regex para capturar partes do log
     padrao_tag = re.compile(r"\[([A-Z]+)\]", re.IGNORECASE)
     padrao_suspeito = re.compile(r"\[SUSPEITO\]|\[QUARENTENA\]", re.IGNORECASE)
     padrao_ok = re.compile(r"\[OK\]", re.IGNORECASE)
@@ -24,18 +28,49 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
             if not linha:
                 continue
 
-            # Captura o tipo de log entre colchetes
             m = padrao_tag.findall(linha)
             for tag in m:
                 niveis[tag.upper()] += 1
 
+            tipo = None
             if padrao_suspeito.search(linha):
+                tipo = "suspeito"
                 suspeitos += 1
                 total_emails += 1
-                registros.append({"tipo": "suspeito", "linha": linha})
             elif padrao_ok.search(linha):
+                tipo = "ok"
                 total_emails += 1
-                registros.append({"tipo": "ok", "linha": linha})
+
+            if tipo:
+                # Quebra a linha em partes básicas
+                partes = re.split(r"\s+", linha, maxsplit=5)
+                data = partes[0] if len(partes) > 0 else ""
+                hora = partes[1] if len(partes) > 1 else ""
+
+                # Extrai apenas o conteúdo textual após os metadados
+                mensagem = partes[-1] if len(partes) > 4 else linha
+
+                # Limpa o texto removendo hashes e tags
+                mensagem = re.sub(r"\[[A-Z]+\]", "", mensagem)
+                mensagem = re.sub(r"[0-9a-f]{8,}", "", mensagem)
+
+                # Extrai apenas o motivo do alerta
+                padrao_motivo = re.search(r"palavra suspeita.*?(?=$|;)", mensagem, re.IGNORECASE)
+                if padrao_motivo:
+                    mensagem = padrao_motivo.group(0).strip()
+                else:
+                    # Se não achar motivo, pega um trecho limpo e curto
+                    mensagem = mensagem.strip()
+                    if len(mensagem) > 80:
+                        mensagem = mensagem[:80] + "..."
+
+                registros.append({
+                    "tipo": tipo,
+                    "data": data,
+                    "hora": hora,
+                    "mensagem": mensagem
+                })
+
 
     if total_emails == 0:
         print("Nenhum e-mail encontrado nos logs.")
@@ -44,9 +79,12 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     porcentagem_suspeitos = (suspeitos / total_emails) * 100
     porcentagem_ok = 100 - porcentagem_suspeitos
 
+    # ---------------------------
+    # SALVA CSV FORMATADO
+    # ---------------------------
     df = pd.DataFrame(registros)
     csv_path = os.path.join(pasta_saida, "relatorio_emails.csv")
-    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    df.to_csv(csv_path, index=False, sep=";", encoding="utf-8-sig")
 
     # ---------------------------
     # GRÁFICO DE PIZZA
@@ -70,7 +108,6 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     grafico_barras = os.path.join(pasta_saida, "grafico_barras.png")
     plt.figure(figsize=(6, 4))
 
-    # Se não houver níveis, adiciona um placeholder
     if not niveis:
         niveis = Counter({"SEM NÍVEL": 1})
 
@@ -170,6 +207,7 @@ def gerar_relatorio_completo(caminho_log="logs/phishingbot.log", pasta_saida="re
     print(f"Relatório CSV salvo em: {csv_path}")
     print(f"Dashboard HTML salvo em: {html_path}")
     print(f"Gráficos: {grafico_pizza}, {grafico_barras}")
+
 
 if __name__ == "__main__":
     gerar_relatorio_completo()
