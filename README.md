@@ -1,4 +1,3 @@
-readme:
 
 # 🛡️ Phishing Detection Bot
 
@@ -32,23 +31,47 @@ No Phishing, criminosos se passam por entidades legítimas, geralmente por e-mai
 ## 🚀 Funcionalidades
 
 ### 📧 Conexão com Gmail
-- Integração via OAuth2 para acesso seguro aos e-mails  
+- Integração via **OAuth2** para acesso seguro aos e-mails
+- Suporte à leitura e análise em tempo real
+- Compatível com labels personalizados e quarentena automática
 
 ### 🔍 Detecção Heurística
-- Domínios suspeitos e confiáveis  
-- TLDs suspeitos  
-- Palavras sensíveis: CPF, cartão, senha, prêmio, etc.  
-- Mensagens urgentes ou de pagamento imediato  
+- Identificação de **domínios suspeitos e TLDs maliciosos**
+- Verificação de **palavras sensíveis** (CPF, senha, prêmio, cartão etc.)
+- Detecção de **linguagem de urgência e golpes de pagamento imediato**
+- Análise de headers, remetentes e links presentes no corpo do e-mail
 
 ### 🧠 Machine Learning
-- Random Forest + TF-IDF + 4 features extras  
-- Classificação automatizada de e-mails  
+- Classificação automática com **Random Forest + TF-IDF**
+- Utiliza **4 features adicionais** de segurança comportamental
+- Detecção aprimorada de e-mails de phishing disfarçados
+- Treinável com base em datasets personalizados
 
 ### 🤖 Integração com IA
-- **Google Gemini** para análise avançada de conteúdo e moderação  
+- Conexão com **Google Gemini** para análise semântica e moderação inteligente
+- Interpretação contextual de mensagens, links e intenções
+- Avaliação híbrida **(Heurística + ML + IA)** para máxima precisão
 
 ### 📝 Registro e Logs
-- Armazena e-mails suspeitos com detalhes das heurísticas e resultados do ML  
+- Sistema de log detalhado com níveis **[OK], [SUSPEITO], [QUARENTENA], [INFO], [ERROR]**
+
+- Cada detecção é registrada com **data, hora e motivo do alerta**
+- Exportação automática para **CSV**
+- Suporte para auditoria e rastreabilidade de eventos
+
+### 📊 Relatórios e Dashboards
+
+- Geração automática de **relatórios completos** em /relatorios/
+- Exporta planilhas .csv com colunas: tipo, data, hora e motivo do alerta
+- Gera **gráficos automáticos**:
+    - 🍕 Gráfico de pizza — proporção de e-mails suspeitos
+    - 📊 Gráfico de barras — distribuição dos níveis de log
+
+- Cria **dashboard HTML interativo**, com:
+- Estatísticas resumidas
+- Imagens de gráficos incorporadas
+- Design moderno e responsivo
+- Data e hora da geração
 
 ### ⚡ Modos Especiais
 - **DRY_RUN**: simulação sem mover e-mails  
@@ -90,7 +113,7 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 ---
 
-## Exemplo de Saída:
+## Relatório e Dashboard:
 
 ![alt text](image-3.png)
 
@@ -98,11 +121,11 @@ Todos os emails detectados como phishing são movidos para uma label exclusiva c
 
 ![alt text](image-5.png)
 
+![alt text](image-6.png)
 ---
 
 ## 🔮 Próximos Passos
 
-- Dashboard em tempo real com **métricas de segurança**  
 - Aprimoramento contínuo do modelo ML com **novos datasets**  
 - Suporte a **outros provedores de e-mail** e alertas corporativos  
 
